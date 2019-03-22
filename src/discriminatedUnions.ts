@@ -51,11 +51,11 @@ export function userEmail(): PropSchema {
                     return assertNever(userEmail);;
             };
         },
-        deserializer: (jsonValue: UserEmail): void => {
+        deserializer: (jsonValue: UserEmail, callback): void => {
             // jsonValue is something that should be shaped like a UserEmail - but may not be
             switch (jsonValue.type) {
-                case 'verified': deserialize(getDefaultModelSchema(VerifiedEmail), jsonValue); break;
-                case 'unverified': deserialize(getDefaultModelSchema(UnverifiedEmail), jsonValue); break;
+                case 'verified': deserialize(getDefaultModelSchema(VerifiedEmail), jsonValue, callback); break;
+                case 'unverified': deserialize(getDefaultModelSchema(UnverifiedEmail), jsonValue, callback); break;
                 default: assertNever(jsonValue);
             }
         }
@@ -80,4 +80,4 @@ export const deserializedUser = deserialize(User, sampleUser);
 // Serialized objects a) are safe to stringify b) match the schema c) do not have associated constructor
 export const serializedUser = serialize(deserializedUser);
 // Simulate data coming over network
-export const deserializedFromJson = deserialize(User, JSON.parse('{ "name": "David", "email": { "type": "unverified", "address": "unverified@example.com" } }'));
+export const deserializedFromJson = deserialize(User, JSON.parse('{ "name": "Jason Sample", "email": { "type": "unverified", "address": "unverified@example.com" } }'));
