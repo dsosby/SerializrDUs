@@ -1,5 +1,6 @@
 import {
     createModelSchema,
+    custom,
     primitive,
     reference,
     list,
@@ -9,10 +10,33 @@ import {
     deserialize,
     getDefaultModelSchema,
     serializable,
+    ModelSchema,
+    ClazzOrModelSchema
 } from 'serializr';
+
+const logObject = (obj: any) => console.dir(obj, { colors: true, depth: 10 });
+
+// Custom Serializr for DU types
+function discriminatedUnion(types: ModelSchema<any>[], discriminate: string) {
+    const matchModelSchema = (value: any) => {
+        const modelSchema = types.find(type => type.props[discriminate] === value[discriminate]);
+        if (modelSchema === undefined) {
+            logObject({ value, types });
+            throw `Unknown discriminated union`;
+        }
+
+        return modelSchema;
+    };
+
+    return custom(
+        (value: any) => serialize(matchModelSchema(value), value),
+        (jsonValue: any) => deserialize(matchModelSchema(jsonValue), jsonValue)
+    );
+}
 
 type EmailAddress = string;
 
+// Discriminated Union pattern as described in the TypeScript Handbook
 class VerifiedEmail {
     @serializable type = 'verified';
     @serializable address: EmailAddress;
@@ -34,14 +58,28 @@ class UnverifiedEmail {
     }
 }
 
+// TODO Can we do a decorator on this? Something to prevent mismatch of type and serializr schema
 type UserEmail = VerifiedEmail | UnverifiedEmail;
+
+
+
+const verifiedEmailSchema = createModelSchema(VerifiedEmail, {
+    type: primitive(),
+    address: primitive(),
+    verificationDate: object(Date)
+});
+
+const unverifiedEmailSchema = createModelSchema(UnverifiedEmail, {
+    type: primitive(),
+    address: primitive(),
+});
 
 class User {
     @serializable(identifier())
     uuid = Math.random();
 
     @serializable displayName = 'John Doe';
-    // @serializable email: UserEmail | null = null;
+    //@serializable(discriminatedUnion([verifiedEmailSchema, unverifiedEmailSchema], 'type')) email: UserEmail | null = null;
 }
 
 class Message {
@@ -71,9 +109,13 @@ const message = deserialize(Message, {
     ],
 });
 
-console.dir(message, { colors: true, depth: 10 });
+logObject(message);
 
 // We can call serialize without the first argument here
 //because the schema can be inferred from the decorated classes
 
 const json = serialize(message);
+console.log(`\n\n\nJSON:\n${json}`);
+const messageReified = deserialize(Message, json);
+console.log(`\n\n\nReified:\n`);
+logObject(messageReified);
