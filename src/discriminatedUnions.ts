@@ -81,3 +81,5 @@ export const deserializedUser = deserialize(User, sampleUser);
 export const serializedUser = serialize(deserializedUser);
 // Simulate data coming over network
 export const deserializedFromJson = deserialize(User, JSON.parse('{ "name": "Jason Sample", "email": { "type": "unverified", "address": "unverified@example.com" } }'));
+// Simulate bad data coming over network -- will throw on deserialize (Unexpected object)
+// export const badFromJson = deserialize(User, JSON.parse('{ "name": "Jason Sample", "email": "badStructure@example.com" }'));
