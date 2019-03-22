@@ -1,4 +1,5 @@
 import { PropSchema, serialize, deserialize, serializable, date, getDefaultModelSchema } from 'serializr';
+// Thoughts from here: https://github.com/mobxjs/serializr/issues/65
 
 type Address = string;
 
@@ -60,6 +61,36 @@ export function userEmail(): PropSchema {
             }
         }
     };
+}
+
+/** Generic serializer for discriminated union */
+export function discriminatedUnion<T>(): PropSchema {
+    return {
+        serializer: (sourcePropertyValue: T): any => {
+            if (sourcePropertyValue === null || sourcePropertyValue === undefined) {
+                return sourcePropertyValue;
+            }
+
+            switch (sourcePropertyValue.type) {
+                // TODO Need to map all possible type values to class constructor functions
+                case 'sometype':
+                    // Serialize based on associated clazz schema
+                    // TODO Cannot get model schema from a type T -- it's looking at a runtime value on the constructor function
+                    // Decorators are at runtime so cannot help here
+                    return serialize(getDefaultModelSchema(T), sourcePropertyValue);
+                default:
+                    return assertNever(sourcePropertyValue);
+            }
+        },
+        deserializer: (jsonValue: T, callback): void => {
+            // jsonValue is something that should be shaped like a T - but may not be
+            switch (jsonValue.type) {
+                case 'sometype': deserialize(getDefaultModelSchema(VerifiedEmail), jsonValue, callback); break;
+                case 'unverified': deserialize(getDefaultModelSchema(UnverifiedEmail), jsonValue, callback); break;
+                default: assertNever(jsonValue);
+            }
+        }
+    }
 }
 
 
