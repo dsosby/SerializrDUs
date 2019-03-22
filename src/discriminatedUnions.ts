@@ -1,18 +1,12 @@
-// Desired syntax
-const enum UserEmailTypes {
-    Verified = 'verified',
-    Unverified = 'unverified'
-}
-
-type DiscriminatedUnion<T> = {
-    type: T
-}
+import { PropSchema, serialize, deserialize, serializable, date, getDefaultModelSchema } from 'serializr';
 
 type Address = string;
-class VerifiedEmail implements DiscriminatedUnion<UserEmailTypes> {
-    public type = UserEmailTypes.Verified;
-    public address: Address;
-    public verificationDate: Date;
+
+class VerifiedEmail {
+    @serializable readonly type = 'verified';
+    @serializable address: Address;
+    @serializable(date()) verificationDate: Date;
+    nonSerializedTag = Symbol('NotSerialized');
 
     constructor(address: Address,
                 verificationDate: Date) {
@@ -21,30 +15,69 @@ class VerifiedEmail implements DiscriminatedUnion<UserEmailTypes> {
     }
 }
 
-class UnverifiedEmail implements DiscriminatedUnion<UserEmailTypes> {
-    public type = UserEmailTypes.Unverified;
-    public address: Address;
+class UnverifiedEmail {
+    @serializable readonly type = 'unverified';
+    @serializable address: Address;
+    nonSerializedTag = Symbol('NotSerialized');
 
     constructor(address: Address) {
         this.address = address;
     }
 }
 
-type DU<T> = T extends Array<infer U> ? U|U : T;
-type UserEmailDU = DU<[VerifiedEmail, UnverifiedEmail]>;
+type UserEmail = VerifiedEmail | UnverifiedEmail;
 
-type UserEmail = VerifiedEmail | UnverifiedEmail
-
-function serialize<T extends DiscriminatedUnion<T>>(unionValue: DiscriminatedUnion<T>): string {
-    // Pick serialization schema/strategy based on union
-    return '';
+/** From TypeScript Handbook */
+function assertNever(x: never): never {
+    throw new Error(`Unexpected object: ${x}`);
 }
 
-function deserialize<T extends DiscriminatedUnion<T>>(stringified: string): T | null {
-    // Pick serialization schema based on union
-    return null;
+/** Custom serializer for UserEmail discriminated union */
+export function userEmail(): PropSchema {
+    return {
+        serializer: (userEmail: UserEmail /*sourcePropertyValue: any*/): any => {
+            if (userEmail === null || userEmail === undefined) {
+                return userEmail;
+            }
+
+            switch (userEmail.type) {
+                case 'verified':
+                    // Serialize based on associated clazz schema
+                    return serialize(getDefaultModelSchema(VerifiedEmail), userEmail);
+                case 'unverified':
+                    // Serialize based on associated clazz schema
+                    return serialize(getDefaultModelSchema(UnverifiedEmail), userEmail);
+                default:
+                    return assertNever(userEmail);;
+            };
+        },
+        deserializer: (jsonValue: UserEmail): void => {
+            // jsonValue is something that should be shaped like a UserEmail - but may not be
+            switch (jsonValue.type) {
+                case 'verified': deserialize(getDefaultModelSchema(VerifiedEmail), jsonValue); break;
+                case 'unverified': deserialize(getDefaultModelSchema(UnverifiedEmail), jsonValue); break;
+                default: assertNever(jsonValue);
+            }
+        }
+    };
 }
 
-const email: UserEmail = new VerifiedEmail('test@example.com', new Date());
-//const stringified = serialize(email);
-//const reified = deserialize<UserEmail>('');
+
+export class User {
+    @serializable name: string;
+    @serializable(userEmail()) email: UserEmail;
+
+    constructor(name: string,
+                email: UserEmail) {
+        this.name = name;
+        this.email = email;
+    }
+}
+
+export const sampleUser = new User("David Sample", new VerifiedEmail("verified@example.com", new Date()));
+// Deserialized objects a) conform to the schema b) have associated constructor c) unsafe to stringify
+export const deserializedUser = deserialize(User, sampleUser);
+// Serialized objects a) are safe to stringify b) match the schema c) do not have associated constructor
+export const serializedUser = serialize(deserializedUser);
+// Simulate data coming over network
+export const deserializedFromJson = deserialize(User, JSON.parse('{ "name": "David", "email": { "type": "unverified", "address": "unverified@example.com" } }'));
