@@ -1,10 +1,42 @@
 import { PropSchema, serialize, deserialize, serializable, date, getDefaultModelSchema } from 'serializr';
 // Thoughts from here: https://github.com/mobxjs/serializr/issues/65
 
+// Implementing custom serializr supporting DUs with 'type' field
+interface UnionClazz {
+    new(...args: any): {};
+    type: string;
+}
+
+function discriminatedUnion<U extends UnionClazz>(...unionClazzes: UnionClazz[]) {
+    return {
+        serializer: (sourcePropertyValue: U): any => serialize(sourcePropertyValue),
+        deserializer: (jsonValue: any, callback: (err: any, result: {}) => void): void => {
+            if (jsonValue === undefined || jsonValue === null) {
+                return jsonValue;
+            }
+
+            // jsonValue is something that should be shaped like a U - but may not be
+            // If it is a bad type, a runtime error will throw
+
+            const discriminate = jsonValue.type;
+            const clazz = unionClazzes.find(c => c.type === discriminate); 
+            if (!clazz) {
+                callback(`Unknown type: ${discriminate}`, {});
+            } else {
+                deserialize(clazz, jsonValue, callback);
+            }
+        }
+    }
+}
+
+
+// Sample scenario - a user object with an email that is either verified or unverified
+
 type Address = string;
 
 class VerifiedEmail {
-    @serializable readonly type = 'verified';
+    static readonly type = 'verified';
+    @serializable readonly type = VerifiedEmail.type;
     @serializable address: Address;
     @serializable(date()) verificationDate: Date;
     nonSerializedTag = Symbol('NotSerialized');
@@ -17,7 +49,8 @@ class VerifiedEmail {
 }
 
 class UnverifiedEmail {
-    @serializable readonly type = 'unverified';
+    static readonly type = 'unverified';
+    @serializable readonly type = UnverifiedEmail.type;
     @serializable address: Address;
     nonSerializedTag = Symbol('NotSerialized');
 
@@ -27,72 +60,10 @@ class UnverifiedEmail {
 }
 
 type UserEmail = VerifiedEmail | UnverifiedEmail;
-
-/** From TypeScript Handbook */
-function assertNever(x: never): never {
-    throw new Error(`Unexpected object: ${x}`);
-}
-
 /** Custom serializer for UserEmail discriminated union */
-export function userEmail(): PropSchema {
-    return {
-        serializer: (userEmail: UserEmail /*sourcePropertyValue: any*/): any => {
-            if (userEmail === null || userEmail === undefined) {
-                return userEmail;
-            }
-
-            switch (userEmail.type) {
-                case 'verified':
-                    // Serialize based on associated clazz schema
-                    return serialize(getDefaultModelSchema(VerifiedEmail), userEmail);
-                case 'unverified':
-                    // Serialize based on associated clazz schema
-                    return serialize(getDefaultModelSchema(UnverifiedEmail), userEmail);
-                default:
-                    return assertNever(userEmail);;
-            };
-        },
-        deserializer: (jsonValue: UserEmail, callback): void => {
-            // jsonValue is something that should be shaped like a UserEmail - but may not be
-            switch (jsonValue.type) {
-                case 'verified': deserialize(getDefaultModelSchema(VerifiedEmail), jsonValue, callback); break;
-                case 'unverified': deserialize(getDefaultModelSchema(UnverifiedEmail), jsonValue, callback); break;
-                default: assertNever(jsonValue);
-            }
-        }
-    };
-}
-
-/** Generic serializer for discriminated union */
-export function discriminatedUnion<T>(): PropSchema {
-    return {
-        serializer: (sourcePropertyValue: T): any => {
-            if (sourcePropertyValue === null || sourcePropertyValue === undefined) {
-                return sourcePropertyValue;
-            }
-
-            switch (sourcePropertyValue.type) {
-                // TODO Need to map all possible type values to class constructor functions
-                case 'sometype':
-                    // Serialize based on associated clazz schema
-                    // TODO Cannot get model schema from a type T -- it's looking at a runtime value on the constructor function
-                    // Decorators are at runtime so cannot help here
-                    return serialize(getDefaultModelSchema(T), sourcePropertyValue);
-                default:
-                    return assertNever(sourcePropertyValue);
-            }
-        },
-        deserializer: (jsonValue: T, callback): void => {
-            // jsonValue is something that should be shaped like a T - but may not be
-            switch (jsonValue.type) {
-                case 'sometype': deserialize(getDefaultModelSchema(VerifiedEmail), jsonValue, callback); break;
-                case 'unverified': deserialize(getDefaultModelSchema(UnverifiedEmail), jsonValue, callback); break;
-                default: assertNever(jsonValue);
-            }
-        }
-    }
-}
-
+const userEmail = () => discriminatedUnion(VerifiedEmail, UnverifiedEmail);
+/** Example where developer forgets to add a new type. If used, deserializing will throw runtime exception */
+const badUserEmail = () => discriminatedUnion(UnverifiedEmail);
 
 export class User {
     @serializable name: string;
@@ -102,6 +73,19 @@ export class User {
                 email: UserEmail) {
         this.name = name;
         this.email = email;
+    }
+}
+
+/** This DU implementation has all benefits of TypeScript DUs */
+// assertNever from TypeScript Handbook
+function assertNever(x: never): never { throw new Error(); }
+function exampleFunctionShowingExhaustiveness(email: UserEmail): void {
+    switch (email.type) {
+        // Autocomplete works
+        case 'verified': break;
+        // Commenting out any case will cause compile error at assertNever
+        case 'unverified': break;
+        default: assertNever(email);
     }
 }
 
