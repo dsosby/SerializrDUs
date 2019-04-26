@@ -1,4 +1,4 @@
-import * as DU from './discriminatedUnions';
+import * as Example from './example';
 
 const logObject = (tag: string, obj: any): void => {
     console.log(`${tag}:\n`);
@@ -6,7 +6,9 @@ const logObject = (tag: string, obj: any): void => {
     console.log(`\n\n`);
 }
 
-logObject('Deserialized', DU.deserializedUser);
-logObject('Serialized', DU.serializedUser);
-logObject('DeserializedFromJson', DU.deserializedFromJson);
+logObject('Deserialized', Example.deserializedUser);
+logObject('Serialized', Example.serializedUser);
+logObject('DeserializedFromJson', Example.deserializedFromJson);
 
+console.log('Updating via promise');
+Example.asyncLoadableNote.then(loadableNote => logObject('LoadableNote', loadableNote));
