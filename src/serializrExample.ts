@@ -13,6 +13,7 @@ import {
     ModelSchema,
     ClazzOrModelSchema
 } from 'serializr';
+import { Loadable } from './loadable';
 
 const logObject = (obj: any) => console.dir(obj, { colors: true, depth: 10 });
 
@@ -61,8 +62,6 @@ class UnverifiedEmail {
 // TODO Can we do a decorator on this? Something to prevent mismatch of type and serializr schema
 type UserEmail = VerifiedEmail | UnverifiedEmail;
 
-
-
 const verifiedEmailSchema = createModelSchema(VerifiedEmail, {
     type: primitive(),
     address: primitive(),
@@ -82,24 +81,30 @@ class User {
     //@serializable(discriminatedUnion([verifiedEmailSchema, unverifiedEmailSchema], 'type')) email: UserEmail | null = null;
 }
 
+type LoadableUser = Loadable<User>;
+
 class Message {
     @serializable message = 'Test';
 
     @serializable(object(User))
-    author = null;
+    author: LoadableUser = Loadable.NotStarted();
 
     // Self referencing decorators work in Babel 5.x and Typescript. See below for more.
     @serializable(list(object(Message)))
     comments = [];
 }
 
+
 // You can now deserialize and serialize!
 const message = deserialize(Message, {
     message: 'Hello world',
     author: {
-        uuid: 1,
-        displayName: 'Alice',
-        email: new VerifiedEmail('alice@example.com', new Date())
+        type: 'Available',
+        value: {
+            uuid: 1,
+            displayName: 'Alice',
+            email: new VerifiedEmail('alice@example.com', new Date())
+        }
     },
     comments: [
         {
@@ -114,8 +119,8 @@ logObject(message);
 // We can call serialize without the first argument here
 //because the schema can be inferred from the decorated classes
 
-const json = serialize(message);
-console.log(`\n\n\nJSON:\n${json}`);
-const messageReified = deserialize(Message, json);
+const jsonLike = serialize(message);
+console.log(`\n\n\nJSONLike:\n${jsonLike}`);
+const messageReified: Message = deserialize(Message, jsonLike);
 console.log(`\n\n\nReified:\n`);
 logObject(messageReified);

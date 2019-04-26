@@ -1,4 +1,5 @@
-import { PropSchema, serialize, deserialize, serializable, date, getDefaultModelSchema } from 'serializr';
+import { Clazz, PropSchema, serialize, deserialize, serializable, date, getDefaultModelSchema, identifier, ModelSchema } from 'serializr';
+import { LoadError, Loadable, LoadableUpdate, NotStarted, InProgress, Available } from './loadable';
 // Thoughts from here: https://github.com/mobxjs/serializr/issues/65
 
 // Implementing custom serializr supporting DUs with 'type' field
@@ -29,7 +30,6 @@ function discriminatedUnion<U extends UnionClazz>(...unionClazzes: UnionClazz[])
     }
 }
 
-
 // Sample scenario - a user object with an email that is either verified or unverified
 
 type Address = string;
@@ -45,6 +45,16 @@ class VerifiedEmail {
                 verificationDate: Date) {
         this.address = address;
         this.verificationDate = verificationDate;
+    }
+}
+
+class Note {
+    @serializable(identifier()) id: string;
+    @serializable text: string;
+
+    constructor(id: string, text: string) {
+        this.id  = id;
+        this.text = text;
     }
 }
 
@@ -65,9 +75,20 @@ const userEmail = () => discriminatedUnion(VerifiedEmail, UnverifiedEmail);
 /** Example where developer forgets to add a new type. If used, deserializing will throw runtime exception */
 const badUserEmail = () => discriminatedUnion(UnverifiedEmail);
 
+/** Custom serializer for a Loadable<T> */
+function loadable<T>(valueClazz: Clazz<T>) {
+    return discriminatedUnion(NotStarted, InProgress, LoadError, class AvailableInstance extends Available<T> {
+        static readonly type = Available.type;
+    });
+}
+
+const SampleNote = new Note('id1234', 'This is a cool product');
+
 export class User {
     @serializable name: string;
     @serializable(userEmail()) email: UserEmail;
+    @serializable(loadable(Note)) note: Loadable<Note> = Loadable.Available(SampleNote);
+    @serializable(loadable(Note)) noteUpdate: LoadableUpdate = Loadable.InProgress();
 
     constructor(name: string,
                 email: UserEmail) {
