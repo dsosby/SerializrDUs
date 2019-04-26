@@ -57,6 +57,7 @@ class Note {
         this.text = text;
     }
 }
+const SampleNote = new Note('id1234', 'This is a cool product');
 
 class UnverifiedEmail {
     static readonly type = 'unverified';
@@ -81,8 +82,6 @@ function loadable<T>(valueClazz: Clazz<T>) {
         static readonly type = Available.type;
     });
 }
-
-const SampleNote = new Note('id1234', 'This is a cool product');
 
 export class User {
     @serializable name: string;
